@@ -67,8 +67,8 @@ public class JedisIndex {
 	 * @return Set of URLs.
 	 */
 	public Set<String> getURLs(String term) {
-        // FILL THIS IN!
-		return null;
+        Set<String> urlSet = jedis.smembers(urlSetKey(term));
+		return urlSet;
 	}
 
     /**
@@ -78,8 +78,15 @@ public class JedisIndex {
 	 * @return Map from URL to count.
 	 */
 	public Map<String, Integer> getCounts(String term) {
-        // FILL THIS IN!
-		return null;
+        Map<String, Integer> map = new HashMap<String, Integer>();
+        // get all URLs associated with the term
+        Set<String> urlSet = getURLs(term);
+        // map each URL to its count
+        for (String url : urlSet) {
+        	Integer count = getCount(url, term);
+        	map.put(url, count);
+        }
+		return map;
 	}
 
     /**
@@ -90,8 +97,11 @@ public class JedisIndex {
 	 * @return
 	 */
 	public Integer getCount(String url, String term) {
-        // FILL THIS IN!
-		return null;
+        String key = termCounterKey(url);
+        // get the count associated with the term
+        String count = jedis.hget(key, term);
+        // convert result to Integer
+		return new Integer(count);
 	}
 
 
@@ -102,7 +112,24 @@ public class JedisIndex {
 	 * @param paragraphs  Collection of elements that should be indexed.
 	 */
 	public void indexPage(String url, Elements paragraphs) {
-        // FILL THIS IN!
+        // process the paragraphs by counting the terms
+        TermCounter termCounter = new TermCounter(url);
+        termCounter.processElements(paragraphs);
+
+        // add the page to the index
+        Transaction transaction = jedis.multi();
+        String urlLabel = termCounter.getLabel();
+        String key = termCounterKey(url);
+
+        // delete any existing old index
+        transaction.del(key);
+
+        // add entries to the termcounter
+        for (String term : termCounter.keySet()) {
+        	transaction.hset(key, term, termCounter.get(term).toString());
+        	transaction.sadd(urlSetKey(term), url);
+        }
+        transaction.exec();
 	}
 
 	/**
